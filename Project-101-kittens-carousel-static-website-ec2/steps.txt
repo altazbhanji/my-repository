@@ -1,0 +1,40 @@
+Security Group
+- Name: altaz-101-carousel-sg
+- Description: altaz-101-carousel-sg
+- VPC: Default
+- Inbound rules:
+    Rule1:
+        Port: 22
+        From: Anywhere
+    Rule2:
+        Port: 80
+        From: Anywhere
+- Outbound rules:
+    Default
+
+
+(change Vincenzo to <Name> in index.html)
+
+EC2 Instance
+    Name: altaz-carousel-101
+    AMI: ami-0022f774911c1d690
+    Instance Type: t2.micro
+    key pair: altaz-clarusway
+    SecurityGroup: (The one above)
+    Everything else: Default
+
+    To install Apache:
+    1. sudo yum update -y
+    2. sudo yum install httpd -y
+    3. sudo chmod +r /var/www/html/
+    4. FOLDER=<https://raw.githubusercontent.com/altazbhanji/my-repository/main/Project-101-kittens-carousel-static-website-ec2/static-web>
+    5. wget ${FOLDER}/index.html
+    6. wget ${FOLDER}/cat0.jpg
+    7. wget ${FOLDER}/cat1.jpg
+    8. wget ${FOLDER}/cat2.jpg
+    9. wget ${FOLDER}/cat3.png
+    11. sudo systemctl enable httpd
+    10. sudo systemctl start httpd
+
+
+

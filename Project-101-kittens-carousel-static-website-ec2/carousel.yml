@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  This CloudFormation Template for running Kittens Carousel Static Website on EC2. 
+  Kittens Carousel Static Website will be deployed on Amazon Linux 2 
+  EC2 Instance with custom security group which allows http connections on port 80 
+  and ssh port 22 from anywhere. Kittens Carousel Static Website is downloaded from 
+  my Public Github repository, then deployed on Apache Web Server.
+  
+Resources:
+
+  rSecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: altaz-cfn-101-carousel-sg
+      GroupName: altaz-cfn-101-carousel-sg
+      SecurityGroupIngress: 
+        -   CidrIp: 0.0.0.0/0
+            ToPort: 22
+            FromPort: 22
+            IpProtocol: tcp
+        -   CidrIp: 0.0.0.0/0
+            ToPort: 80
+            FromPort: 80
+            IpProtocol: tcp
+  
+# Outputs:
