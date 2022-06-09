@@ -22,5 +22,43 @@ Resources:
             ToPort: 80
             FromPort: 80
             IpProtocol: tcp
-  
-# Outputs:
+
+  rWebserver:
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: ami-0022f774911c1d690
+      InstanceType: t2.micro
+      KeyName: altaz-clarusway
+      SecurityGroupIds: 
+        - !GetAtt rSecGroup.GroupId
+      Tags: 
+        - Key: Name
+          Value: altaz-carousel-101-cfn
+      UserData: 
+        Fn::Base64: 
+          |
+            #! /bin/bash -x
+
+            yum update -y
+            yum install httpd -y
+            chmod +r /var/www/html
+
+            cd /var/www/html
+
+            FOLDER=https://raw.githubusercontent.com/altazbhanji/my-repository/main/Project-101-kittens-carousel-static-website-ec2/static-web
+            wget ${FOLDER}/index.html
+            wget ${FOLDER}/cat0.jpg
+            wget ${FOLDER}/cat1.jpg
+            wget ${FOLDER}/cat2.jpg
+            wget ${FOLDER}/cat3.png
+
+            systemctl enable httpd
+            systemctl start httpd          
+
+Outputs:
+
+  WebsiteURL:
+    Description: Kittens Carousel Application URL
+    Value: !Sub
+      - http://${PublicAddress}
+      - PublicAddress: !GetAtt rWebserver.PublicDnsName
