@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: |
+  CloudFormation template for resources to build Roman Numerals Flask App.
+  Includes infrastructure and code deployment.
+  
+Parameters:
+
+  pKeyName:
+    Description: Name of key pair
+    Type: AWS::EC2::KeyPair::KeyName
+
+  pInstanceType:
+    Description: Instance type to use
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+    - t2.micro
+    - t3.micro
+
+  pAmiId:
+    Description: AMI to use
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-kernel-5.10-hvm-x86_64-ebs'
+
+Resources:
+
+  rSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Altaz Roman Numerals Allow SSH and HTTP' # Required
+      GroupName: 'Altaz Roman Numerals Allow SSH and HTTP'
+      SecurityGroupIngress:
+      - 
+        IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - 
+        IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+
+  rFlaskServer:
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: !Ref pAmiId
+      InstanceType: !Ref pInstanceType
+      KeyName: !Ref pKeyName
+      SecurityGroupIds: 
+        - !Ref rSecurityGroup
+      Tags: 
+        - Key: Name
+          Value: altaz-flask-server
+      UserData: !Base64 |
+        #!/bin/bash -x
+
+        yum update -y
+        yum install python3 -y
+        pip3 install flask
+        cd /home/ec2-user
+        FOLDER='https://raw.githubusercontent.com/altazbhanji/my-repository/main/Project-001-Roman-Numerals-Converter'
+        wget ${FOLDER}/app.py
+        mkdir templates && cd templates
+        wget ${FOLDER}/templates/index.html
+        wget ${FOLDER}/templates/result.html
+        cd ..
+        python3 app.py      
+
+
+
+  
+Outputs:
+
+  WebsiteURL:
+    Description: URL of the website
+    Value: !Sub
+    - http://${PublicAddress}
+    - PublicAddress: !GetAtt rFlaskServer.PublicDnsName
