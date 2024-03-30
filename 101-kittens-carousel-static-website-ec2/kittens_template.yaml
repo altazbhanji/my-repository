@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  EC2 instance and SG for kittens carousel website
+  
+Parameters:
+
+  pKeyname:
+    Description: Key name for EC2 access
+    Type: AWS::EC2::KeyPair::KeyName
+
+  pImageId:
+    Description: Latest Linux AMI
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+
+Resources:
+
+  rSecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH and HTTP from Internet
+      GroupName: SSHandHTTP
+      SecurityGroupIngress: 
+        - CidrIp: 0.0.0.0/0
+          FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+        - CidrIp: 0.0.0.0/0
+          FromPort: 80
+          ToPort: 80
+          IpProtocol: tcp
+      Tags: 
+        - Key: Name
+          Value: KittensSecGroup
+        - Key: Company
+          Value: Clarusway
+
+  rWebServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref pImageId
+      InstanceType: t2.micro
+      KeyName: !Ref pKeyname
+      SecurityGroupIds: 
+        - !Ref rSecGroup
+      Tags: 
+        - Key: Name
+          Value: Kittens Web Server
+      UserData: !Base64 |
+        #!/bin/bash -x
+
+        # update the OS
+        yum update -y
+
+        #install Apache
+        yum install httpd -y
+
+        # copy content to /var/www/html folder
+        cd /var/www/html
+        FOLDER="https://raw.githubusercontent.com/altazbhanji/my-repository/main/101-kittens-carousel-static-website-ec2/static-web"
+        wget ${FOLDER}/index.html
+        wget ${FOLDER}/cat0.jpg
+        wget ${FOLDER}/cat1.jpg
+        wget ${FOLDER}/cat2.jpg
+
+        # start and enable Apache service
+        systemctl start httpd
+        systemctl enable httpd      
