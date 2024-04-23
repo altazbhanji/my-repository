@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  Template to deploy Roman Numerals Flask App
+  
+Parameters:
+
+  pInstanceType:
+    Description: Instance type to use
+    Type: String
+    AllowedValues:
+         - t2.micro
+         - t2.small
+         - t2.medium
+    Default: t2.micro
+
+  pKeyName:
+    Description: Key Name for Key Pair
+    Type: AWS::EC2::KeyPair::KeyName
+
+  pImageId:
+    Description: Latest linux AMI
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+    AllowedValues:
+         - /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+         - /aws/service/ami-amazon-linux-latest/amzn2-ami-kernel-5.10-hvm-x86_64-gp2
+
+  pHomeDirectory:
+    Description: Github home directory 
+    Type: String
+    Default: https://raw.githubusercontent.com/altazbhanji/my-repository/main/001-roman-numerals-converter
+  
+Resources:
+
+  rSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH and HTTP access
+      GroupName: AllowSSHandHTTP
+      SecurityGroupIngress: 
+        - CidrIp: 0.0.0.0/0
+          FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+        - CidrIp: 0.0.0.0/0
+          FromPort: 80
+          ToPort: 80
+          IpProtocol: tcp
+      Tags: 
+        - Key: Name
+          Value: RomanNumeralSG
+
+  rWebServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref pImageId
+      InstanceType: !Ref pInstanceType
+      KeyName: !Ref pKeyName
+      SecurityGroupIds: 
+        - !Ref rSecurityGroup
+      Tags: 
+        - Key: Name
+          Value: altaz-roman-numeral-web-server
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash -x
+
+            # update the OS
+            yum update -y
+
+            # install python and flask
+            yum install python3 -y
+            yum install pip -y
+            pip3 install flask
+
+            # install application files
+            cd /home/ec2-user
+            mkdir templates
+            wget ${pHomeDirectory}/app.py
+            wget -P templates ${pHomeDirectory}/templates/index.html
+            wget -P templates ${pHomeDirectory}/templates/result.html
+
+            # run application
+            python3 app.py
+
+  
+Outputs:
+
+  WebURL:
+    Description: Full Web URL
+    Value: !Join [ "", [ "http://",  !GetAtt rWebServer.PublicDnsName ] ]

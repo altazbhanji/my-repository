@@ -1,0 +1,173 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: |
+  Load balancer and autoscaling group for web application
+  
+Parameters:
+
+  pVpcId:
+    Description: VPC where resources are deployed
+    Type: AWS::EC2::VPC::Id
+
+  pSubnetIds:
+    Description: Subnets for load balancer
+    Type: List<AWS::EC2::Subnet::Id>
+
+  pImageId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+
+  pKeyname:
+    Description: Key pair key name
+    Type: AWS::EC2::KeyPair::KeyName
+  
+Resources:
+
+  rAsgPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref rAutoscalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 60.0
+
+  rAutoscalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: altaz-asg
+      LaunchTemplate: 
+        LaunchTemplateId: !Ref rLaunchTemplate
+        Version: !GetAtt rLaunchTemplate.DefaultVersionNumber
+      VPCZoneIdentifier: !Ref pSubnetIds
+      TargetGroupARNs: 
+        - !Ref rTargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 200
+      DesiredCapacity: "2"
+      MinSize: "1"
+      MaxSize: "4"
+
+  rLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: altaz-launch-template
+      VersionDescription: version 1
+      LaunchTemplateData: 
+        ImageId: !Ref pImageId
+        InstanceType: t2.micro
+        KeyName: !Ref pKeyname
+        Monitoring: 
+          Enabled: true
+        SecurityGroupIds: 
+          - !GetAtt rInstanceSecGroup.GroupId
+        UserData: !Base64 |
+          #!/bin/bash -x
+          #update os
+          yum update -y
+          #install apache server
+          yum install -y httpd
+          # get private ip address of ec2 instance using instance metadata
+          TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` \
+          && PRIVATE_IP=`curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4`
+          # get public ip address of ec2 instance using instance metadata
+          TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` \
+          && PUBLIC_IP=`curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4` 
+          # get date and time of server
+          DATE_TIME=`date`
+          # set all permissions
+          chmod -R 777 /var/www/html
+          # create a custom index.html file
+          echo "<html>
+              <head>
+              <title> Application Load Balancer</title>
+              </head>
+              <body>
+                  <h1>Testing Application Load Balancer</h1>
+                  <h2>Congratulations! You have created an instance from Launch Template</h2>
+                  <h3>This web server is launched from the launch template by Altaz Bhanji</h3>
+                  <p>This instance is created at <b>$DATE_TIME</b></p>
+                  <p>Private IP address of this instance is <b>$PRIVATE_IP</b></p>
+                  <p>Public IP address of this instance is <b>$PUBLIC_IP</b></p>
+              </body>
+              </html>" > /var/www/html/index.html
+              # start apache server
+              systemctl start httpd
+              systemctl enable httpd
+
+
+  rInstanceSecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP and SSH Traffic
+      GroupName: AllowHTTPAndSSH
+      SecurityGroupIngress: 
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+      Tags: 
+        - Key: Name
+          Value: server-allow-http-and-ssh
+      VpcId: !Ref pVpcId
+
+  rLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Name: altaz-load-balancer
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      SecurityGroups: 
+        - !GetAtt rLbSecGroup.GroupId
+      Subnets: !Ref pSubnetIds
+
+  rListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref rLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions: 
+        - Type: forward
+          TargetGroupArn: !Ref rTargetGroup
+
+  rTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      TargetType: instance
+      Name: altaz-target-group
+      Port: 80
+      Protocol: HTTP
+      IpAddressType: ipv4
+      VpcId: !Ref pVpcId
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      HealthCheckTimeoutSeconds: 5
+      HealthCheckIntervalSeconds: 30
+
+  rLbSecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP Traffic
+      GroupName: AllowHTTP
+      SecurityGroupIngress: 
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+      Tags: 
+        - Key: Name
+          Value: lb-allow-http
+      VpcId: !Ref pVpcId
+
+
+  
+#Outputs:
