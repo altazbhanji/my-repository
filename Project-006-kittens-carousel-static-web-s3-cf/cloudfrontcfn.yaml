@@ -1,0 +1,98 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  This cfn file is used for creating a template which runs S3 static 
+  web-hosting using cloudfront distribution.
+Parameters:
+
+  pKittensDomain:
+    Description: Domain name for kittens website 
+    Type: String
+    Default: mykittens.clarusway.us
+
+  pHostedzoneId:
+    Description: Hosted zone id
+    Type: AWS::Route53::HostedZone::Id
+
+
+Resources:
+
+  rKittensBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref pKittensDomain
+      PublicAccessBlockConfiguration: 
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration: 
+        IndexDocument: index.html
+
+  rBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref rKittensBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - 's3:GetObject'
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref rKittensBucket
+                - /*
+
+  rCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref pKittensDomain
+      ValidationMethod: DNS
+      DomainValidationOptions: 
+        - DomainName: !Ref pKittensDomain
+          HostedZoneId: !Ref pHostedzoneId
+
+  rCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig: 
+        Comment: CloudFront distribution for Kittens Carousel
+        Enabled: true        
+        Origins:
+          - Id: KittensOrigin
+            CustomOriginConfig: 
+               OriginProtocolPolicy: http-only
+            DomainName: !Select [2, !Split ["/", !GetAtt rKittensBucket.WebsiteURL]]
+        DefaultCacheBehavior: 
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          TargetOriginId: KittensOrigin
+          ViewerProtocolPolicy: redirect-to-https
+        PriceClass: PriceClass_100          
+        Aliases:
+          - !Ref pKittensDomain
+        ViewerCertificate: 
+          AcmCertificateArn: !Ref rCertificate
+          MinimumProtocolVersion: "TLSv1.2_2021"
+          SslSupportMethod: sni-only
+        HttpVersion: http2
+        DefaultRootObject: index.html
+
+  rDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: !Ref pKittensDomain
+      Type: A
+      AliasTarget: 
+        DNSName: !GetAtt rCloudFrontDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+      HostedZoneId: !Ref pHostedzoneId
+
+
+Outputs:
+  CloudfrontEndpoint:
+    Description: Endpoint for CloudFront
+    Value: !Join [ '', ['https://', !GetAtt rCloudFrontDistribution.DomainName]]
+
+    

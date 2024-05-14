@@ -12,8 +12,68 @@ Parameters:
   pSubnets:
     Description: Subnets for ALB
     Type: List<AWS::EC2::Subnet::Id>
+
+  pAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64'
+
+  pKeypair:
+    Description: Keypair for EC2 instance
+    Type: AWS::EC2::KeyPair::KeyName
+
   
 Resources:
+
+  rAutoscalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones:
+        !GetAZs ""
+      DesiredCapacity: "2"
+      HealthCheckGracePeriod: 300
+      HealthCheckType: ELB
+      LaunchTemplate:
+        LaunchTemplateId: !Ref rWebServer
+        Version: !GetAtt rWebServer.LatestVersionNumber
+      MaxSize: "3"
+      MinSize: "1"
+      TargetGroupARNs:
+        - !Ref rWebServerTargetGroup
+
+  rWebServer:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !Ref pAmiId
+        InstanceType: t2.micro
+        KeyName: !Ref pKeypair
+        SecurityGroupIds:
+          - !Ref rAlbSecGroup
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: phonebook-webserver
+        UserData: 
+          Fn::Base64:
+            !Sub 
+              - |
+                #! /bin/bash -x
+                yum update -y
+                yum install python3 -y
+                yum install pip -y
+                pip3 install flask
+                pip3 install flask_mysql
+                pip install Flask==2.1.3
+                pip install Werkzeug==2.2.2
+                echo "${MyDBURI}" > /home/ec2-user/dbserver.endpoint
+                FOLDER="https://raw.githubusercontent.com/altazbhanji/my-repository/main/Project-004-Phonebook-Application/"
+                curl -s --create-dirs -o "/home/ec2-user/templates/index.html" -L "$FOLDER"templates/index.html
+                curl -s --create-dirs -o "/home/ec2-user/templates/add-update.html" -L "$FOLDER"templates/add-update.html
+                curl -s --create-dirs -o "/home/ec2-user/templates/delete.html" -L "$FOLDER"templates/delete.html
+                curl -s --create-dirs -o "/home/ec2-user/phonebook-app.py" -L "$FOLDER"phonebook-app.py
+                python3 /home/ec2-user/phonebook-app.py
+              - MyDBURI: !GetAtt rDatabaseServer.Endpoint.Address
 
   rWebServerTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
