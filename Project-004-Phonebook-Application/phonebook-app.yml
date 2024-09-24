@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: |
+  Build a phonebook app with EC2, RDS and Load Balancer
+
+Parameters:
+
+  VpcId:
+    Description: VPC where application is deployed
+    Type: AWS::EC2::VPC::Id
+
+Resources:
+
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow access to RDS # Required
+      GroupName: AllowMySqlAccess
+      SecurityGroupIngress: 
+        - CidrIp: 0.0.0.0/0
+          FromPort: 3306
+          ToPort: 3306
+          IpProtocol: tcp
+      VpcId: !Ref VpcId
+
+  DbInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: mysql
+      EngineVersion: "8.0.36"
+      DBInstanceIdentifier: phonebook-instance
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: "20"
+      PubliclyAccessible: true
+      Port: "3306"
+      VPCSecurityGroups: 
+        - !GetAtt DbSecurityGroup.GroupId
+      MultiAZ: false
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: false
+      BackupRetentionPeriod: 0
+      MasterUsername: '{{resolve:ssm:/my-clarusway/db/user}}'
+      MasterUserPassword: '{{resolve:ssm:/my-clarusway/db/password}}'
+      DBName: '{{resolve:ssm:/my-clarusway/db/dbname}}'
+
+
+
+
+#Outputs:
+
