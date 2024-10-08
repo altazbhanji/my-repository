@@ -9,7 +9,124 @@ Parameters:
     Description: VPC where application is deployed
     Type: AWS::EC2::VPC::Id
 
+  Subnets:
+    Description: Subnets for load balancing
+    Type: List<AWS::EC2::Subnet::Id>
+
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64'
+
+  KeyName:
+    Description: Please enter your Key pair
+    Type: AWS::EC2::KeyPair::KeyName 
+
+
 Resources:
+
+  AlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions: 
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthyThresholdCount: 2
+      HealthCheckTimeoutSeconds: 10
+      UnhealthyThresholdCount: 3
+      TargetType: instance
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VpcId   
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      Scheme: internet-facing
+      SecurityGroups: 
+        - !GetAtt LbSecurityGroup.GroupId
+      Subnets: !Ref Subnets
+      Type: application
+
+  LbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow access to LB # Required
+      GroupName: AllowHTTPAccess
+      SecurityGroupIngress: 
+        - CidrIp: 0.0.0.0/0
+          FromPort: 80
+          ToPort: 80
+          IpProtocol: tcp
+      VpcId: !Ref VpcId
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow access to EC2 # Required
+      GroupName: AllowHTTPandSSHAccess
+      SecurityGroupIngress: 
+        - CidrIp: 0.0.0.0/0
+          FromPort: 80
+          ToPort: 80
+          IpProtocol: tcp
+        - CidrIp: 0.0.0.0/0
+          FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+      VpcId: !Ref VpcId      
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData: 
+        ImageId: !Ref LatestAmiId 
+        InstanceType: t2.micro
+        KeyName: !Ref KeyName 
+        SecurityGroupIds:
+          - !GetAtt WebServerSecurityGroup.GroupId
+        TagSpecifications: 
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub Web Server of ${AWS::StackName} Stack
+        UserData:
+          Fn::Base64:
+              |
+              #!/bin/bash -x
+              yum update -y
+              yum install python3 -y
+              yum install python-pip -y
+              pip3 install Flask==2.3.3
+              pip3 install Flask-MySql
+              yum install git -y
+              echo "phonebook-instance.cbanmzptkrzf.us-east-1.rds.amazonaws.com" > /home/ec2-user/dbserver.endpoint
+              cd /home/ec2-user
+              git clone https://github.com/altazbhanji/my-repository.git
+              python3 /home/ec2-user/my-repository/Project-004-Phonebook-Application/phonebook-app.py
+
+  ASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties: 
+      DesiredCapacity: "2"
+      HealthCheckGracePeriod: 300
+      HealthCheckType: ELB 
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate 
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber 
+      MaxSize: "3"
+      MinSize: "1"
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      VPCZoneIdentifier: !Ref Subnets # not array
+
 
   DbSecurityGroup:
     Type: AWS::EC2::SecurityGroup

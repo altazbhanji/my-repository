@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: |
+  This cfn file is used for creating a template which runs S3 static 
+  web-hosting using cloudfront distribution.
+
+Parameters:
+
+  KittensDomainName:
+    Description: Domain name for static website
+    Type: String
+    Default: kittens.clarusway.us
+
+  HostedZoneId:
+    Description: Hosted Zone Id for domain
+    Type: AWS::Route53::HostedZone::Id
+
+Resources:
+
+  KittensBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref KittensDomainName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - BucketKeyEnabled: false
+            ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+
+  KittensBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref KittensBucket
+      PolicyDocument: 
+        Id: PublicReadPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Join [ '', [ !GetAtt KittensBucket.Arn, '/*' ] ]
+
+  KittensCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref KittensDomainName
+      ValidationMethod: DNS
+      DomainValidationOptions: 
+        - DomainName: !Ref KittensDomainName
+          HostedZoneId: !Ref HostedZoneId
+
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - Id: KittensOrigin
+            DomainName: !Select [2, !Split ['/', !GetAtt KittensBucket.WebsiteURL]]
+            CustomOriginConfig:
+              HTTPPort: 80
+              OriginProtocolPolicy: http-only
+        DefaultRootObject: index.html              
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          TargetOriginId: KittensOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+        PriceClass: PriceClass_100
+        Aliases:
+          - !Ref KittensDomainName
+        ViewerCertificate:
+          AcmCertificateArn: !Ref KittensCertificate
+          MinimumProtocolVersion: TLSv1.2_2021
+          SslSupportMethod: sni-only
+        Enabled: true
+        HttpVersion: http2
+
+  RecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: !Ref KittensDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+      HostedZoneId: !Ref HostedZoneId
+
+Outputs:
+
+  BucketName:
+    Description: Name of S3 Bucket
+    Value: !Ref KittensBucket
+    
+  CloudfrontEndpoint:
+    Description: CloudFront Endpoint
+    Value: !GetAtt CloudFrontDistribution.DomainName
+    
+  FullDomainName:
+    Description: Website URL
+    Value: !Ref KittensDomainName
+    
