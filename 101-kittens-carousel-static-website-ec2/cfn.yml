@@ -1,11 +1,55 @@
-# - Create a temporary EC2 instance
-# - Research steps needed to install our software
-# - Run each commmand one at time in order
-# - Check that your website (software) is working
-# - Save each command in a script
-# - That will create our Bash script
-# - Create another temporary ec2 instance, with user data = bash script
-# - Validate the website (software) is working in the new instance
-# - ===> now you have good user data <====
-# - you can delete both temporary instances
+AWSTemplateFormatVersion: 2010-09-09
 
+Description: |
+  Create static kittens carousel website
+  
+#Parameters:
+  
+Resources:
+
+  WebSecGrp:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH and HTTP from the Internet
+      GroupName: web-sec-group
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: "0.0.0.0/0"
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: "0.0.0.0/0"
+
+  WebServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      Tags: 
+        - Key: Name
+          Value: altaz-kittens-server
+      ImageId: ami-085ad6ae776d8f09c
+      InstanceType: t2.micro
+      KeyName: altaz-clarusway
+      SecurityGroupIds: 
+        - Fn::GetAtt: WebSecGrp.GroupId
+      UserData:
+        Fn::Base64: 
+          |
+            #!/bin/bash -x
+            yum update -y
+            yum install httpd -y
+            cd /var/www/html
+            FOLDER="https://raw.githubusercontent.com/altazbhanji/my-repository/refs/heads/main/101-kittens-carousel-static-website-ec2/static-web"
+            wget ${FOLDER}/index.html
+            wget ${FOLDER}/cat0.jpg
+            wget ${FOLDER}/cat1.jpg
+            wget ${FOLDER}/cat2.jpg
+            systemctl start httpd
+            systemctl enable httpd
+  
+Outputs:
+
+  WebsiteUrl:
+    Description: Kittens carousel website URL
+    Value: !Join [ "", [ "http://", Fn::GetAtt: WebServer.PublicDnsName ] ]
