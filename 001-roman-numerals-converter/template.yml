@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+
+Description: |
+  Build webserver for flask application
+
+
+Parameters:
+
+  KeyPair:
+    Description: Key Name for instance
+    Type: AWS::EC2::KeyPair::KeyName
+
+  LatestAmiId:
+      Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+      Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64'
+
+
+Resources:
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP and SSH
+      GroupName: WebServerSecurityGroup
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+  WebServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      Tags: 
+        - Key: Name
+          Value: altaz-webserver
+      ImageId: !Ref LatestAmiId
+      InstanceType: t2.micro
+      KeyName: !Ref KeyPair
+      SecurityGroupIds: 
+        - !GetAtt SecurityGroup.GroupId
+      UserData: !Base64 |
+          #!/bin/bash -x
+
+          # update system
+          yum update -y
+
+          # install Python and flask
+          yum install python3 -y
+          yum install pip -y
+          pip install flask
+
+          #### install the code  ###
+
+          # change to the user directory
+          cd /home/ec2-user
+
+          # get the app.py file into current dir
+          FOLDER="https://raw.githubusercontent.com/altazbhanji/my-repository/refs/heads/main/001-roman-numerals-converter"
+          wget ${FOLDER}/app.py
+
+          # get the templates into the templates/ directory
+          mkdir templates
+          cd templates
+          wget ${FOLDER}/templates/index.html
+          wget ${FOLDER}/templates/result.html
+
+          # run the python application
+          cd ..
+          python3 app.py
+
+#Outputs:
