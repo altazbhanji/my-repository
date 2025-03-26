@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: |
+  Template to build the phonebook app and infrastructure
+
+Parameters:
+
+  vpc:
+    Description: VPC ID
+    Type: AWS::EC2::VPC::Id
+
+  
+Resources:
+
+  sgRds:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow access to RDS"
+      GroupName: "RDSAccess"
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: "0.0.0.0/0"
+      VpcId: !Ref vpc
+
+  rdsDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: mysql
+      EngineVersion: "8.0.39"
+      Port: "3306"
+      DBInstanceIdentifier: phonebook-instance
+      DBName: clarusway_phonebook
+      MasterUsername: admin
+      MasterUserPassword: clarusway_1234
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: "20"
+      MultiAZ: false
+      VPCSecurityGroups: 
+        - !Ref sgRds
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: false
+      DeletionProtection: false
+      PubliclyAccessible: true
+      BackupRetentionPeriod: 0
+      ApplyImmediately: true
+
+
+#Outputs:
+
