@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: |
+  Cloudformation template for phonebook application
+
+Parameters:
+
+  Subnets:
+    Description: Choose your Subnets
+    Type: List<AWS::EC2::Subnet::Id>
+  
+Resources:
+
+  rdsDbInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: mysql
+      EngineVersion: "8.0.40"
+      MultiAZ: false
+      MasterUsername: admin
+      MasterUserPassword: clarusway_1234
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: "50"
+      PubliclyAccessible: true
+      DBSubnetGroupName: !Ref rdsSubnetGroup
+      VPCSecurityGroups: 
+        - !GetAtt dbSecurityGroup.GroupId
+      Port: "3306"
+      DBName: clarusway_phonebook
+      BackupRetentionPeriod: 3
+
+  dbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable DB Access # Required
+      GroupName: MySqlSecGroup
+      SecurityGroupIngress: 
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+
+  rdsSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: phonebook-app # Required
+      DBSubnetGroupName: phonebook-app-sng
+      SubnetIds: !Ref Subnets
+
+
+#Outputs:
+

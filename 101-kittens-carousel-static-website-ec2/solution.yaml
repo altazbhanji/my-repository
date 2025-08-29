@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: |
+  EC2 instance for static web page
+  
+Parameters:
+
+  ec2KeyPair:
+    Description: Keypair keyname
+    Type: AWS::EC2::KeyPair::KeyName
+  
+Resources:
+
+  ec2SgMain:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow ssh and http from anywhere
+      GroupName: altaz-carousel-sg
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+  ec2InstanceWebServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      Tags: 
+        - Key: Name
+          Value: altaz-webserver
+      ImageId: ami-05ffe3c48a9991133
+      InstanceType: t3.micro
+      KeyName: !Ref ec2KeyPair
+      SecurityGroupIds: 
+        - !GetAtt ec2SgMain.GroupId
+      UserData:
+        Fn::Base64:
+          |
+            #!/bin/bash -x
+
+            dnf update -y
+            dnf install httpd -y
+
+            cd /var/www/html/
+
+            FOLDER="https://raw.githubusercontent.com/altazbhanji/my-repository/refs/heads/main/101-kittens-carousel-static-website-ec2/static-web"
+
+            wget ${FOLDER}/index.html
+            wget ${FOLDER}/cat0.jpg
+            wget ${FOLDER}/cat1.jpg
+            wget ${FOLDER}/cat2.jpg
+
+            systemctl start httpd
+            systemctl enable httpd
+
+  
+#Outputs:
